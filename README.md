@@ -1,159 +1,194 @@
-# OtterDesk Blueprints
+# VC Assistant
 
-`otterdesk-blueprints` is a self-contained OtterDesk-facing worker blueprint catalog. Each blueprint folder includes
-its own manifest, configuration, payloads, README, and user-facing `SPEC.md`.
+`Blueprint ID:` `vc_assistant`
+`Category:` `Finance`
 
-VC Assistant, Financial Advisor, Legal Assistant, and Research Assistant
-use foundational `mn_sdk.llm` calls through blueprint support; they do not
-depend on the deprecated LiteLLM communication skill. Their RAG packages and OCR skills
-own model specifications and use the SDK runtime model wrapper, while each
-blueprint declares only its product-level behavior and required skills and SDK packages.
+Checks a local folder of startup documents on each scheduled batch run, builds a company work queue, runs specialist research and deterministic numerical-analysis agents, and writes organized score-only VC reports for human review.
+
+## What It Does
+
+This blueprint is a report-only early diligence assistant. It helps a reviewer inspect one or more startup document packets with a specialist agent crew for grouping, evidence extraction, fact normalization, public research, seven deterministic scoring methods, score auditing, and batch report writing. MirrorNeuron routes each assigned agent through acknowledged Redis Streams while durable evidence and reports remain filesystem artifacts. The workflow uses `manual_recover`: after a runtime interruption, relaunch the blueprint from its durable inputs instead of repeatedly reconstructing the full agent graph from Redis snapshots.
+
+It does not decide whether to invest, pass, watch, or reject. It writes scores, evidence, assumptions, missing-evidence flags, and source references so the user can decide.
+
+All actor-style LLM analysis uses MirrorNeuron's logical `default` model. The
+bundled catalog normally resolves that default through adaptive local model
+selection, while an operator-selected provider model can replace it with `mn
+model add --file <definition.json> --default`. Numerical formulas and
+missing-evidence gates remain deterministic.
+
+PDF startup packets are extracted only through the shared `llm_ocr_skill`. The public Firecrawl [AnyDoc](https://github.com/firecrawl/anydoc) converter turns non-PDF office documents, spreadsheets, EPUB, RTF, and CSV files into Markdown; TXT, Markdown, and JSON remain direct reads. The OCR model is prepared lazily only when a PDF needs OCR, and PDF files must produce embedded or OCR text for the batch run to continue.
+
+## Online Research Skills
+
+The research phase is configured to use:
+
+- `web_browser_skill` as the single public-browser capability. Standard mode handles discovery, readable-text extraction, retries, throttling, and automatic local engine selection; deep mode uses the constrained `agent-browser` actuator for explicitly rendered profile checks.
+
+The workflow plans privacy-safe searches for company websites, Crunchbase, founder public profiles, funding mentions, competitors, press, and market context. It consumes plain-text results only. Blocked, login-required, CAPTCHA, robots, or rate-limit responses are recorded in `sources.json`; the blueprint does not bypass them.
+
+## Agents And Workflow Steps
+
+Agents and steps are separate concepts:
+
+- An **agent** is a reusable specialist worker with a role and bounded responsibility.
+- A **step** is a durable phase in the workflow DAG. It owns its input/output contract and internal collaboration graph.
+- `manifest.json` chains logical steps with `needs`; each `run.definition` points to one `payloads/steps` module.
+- The compiler expands each step into a generic start boundary, its agent graph, and a generic end boundary.
+- A step may invoke one or many agents, and the same agent may be reused with a unique call alias.
+- `agents.registry` owns each reusable handler and its immutable parameters; `llm.agents` only configures optional LLM review.
+- Agents receive and return route-free SDK messages; the compiled internal graph owns Redis routing, sequencing, fan-out, and fan-in.
+
+| Workflow step | Required agent crew |
+| --- | --- |
+| `detect_packet_changes` | `startup_folder_watcher` |
+| `assemble_company_packets` | `company_packet_grouper` |
+| `prepare_company_evidence` | `document_evidence_extractor`, `claim_normalizer` |
+| `plan_public_research` | `research_planner` |
+| `collect_public_research` | `company_identity_researcher`, `funding_researcher`, `market_comp_researcher`, `traction_verifier`, `rendered_page_researcher` |
+| `reconcile_research_evidence` | `research_reconciler` |
+| `calculate_valuation_scores` | the seven method-specific scorer agents |
+| `audit_valuation_analysis` | `score_consistency_auditor` |
+| `write_company_reports` | `company_report_writer` |
+| `publish_batch_summary` | `batch_index_writer` |
+
+`prepare_company_evidence` runs extractor → normalizer. Public research and valuation scoring fan out through Redis, then a named generic join waits for every required result. Only the generated step end boundary completes the logical step and publishes its declared output. Messages contain bounded outputs and artifact references; confidential documents, research ledgers, and reports stay in the durable filesystem data plane.
+
+## Code Ownership
+
+- `payloads/steps/` contains only logical step contracts, input/output mappings, and internal collaboration graphs.
+- `payloads/agents/` contains executable specialist workers. Each valuation agent has a discoverable module matching its registry ID; for example, `agents/first_chicago_scorer.py` binds the First Chicago worker.
+- `payloads/domain/` contains blueprint-specific diligence policy and deterministic behavior. Valuation formulas are split by method under `domain/valuation/`; the First Chicago formula is in `valuation/first_chicago.py`.
+- `payloads/runtime/` contains dependency bootstrap and runtime/service preparation only. It must not import agent behavior.
+- Shared, domain-neutral mechanisms stay in the SDK, skills, or reusable agent packages. Route-neutral message parsing and artifact references live in `mn_sdk.step_runtime`; durable message-agent replay lives in `prototype_stateful_step_agent`; document hashing, grouping, and common PII redaction live in `document_reading_skill`.
+
+There is intentionally no `payloads/agents/domain.py`. Agents import only the VC domain modules they own, while reusable skills remain independent of VC terminology.
 
 ## Quick Start
 
-List available blueprints:
+From the repository root:
 
 ```bash
-mn blueprint list
+mn blueprint run ./vc_assistant
 ```
 
-Run a catalog blueprint:
+Skill versions are declared in `dependencies.json`. In local dev mode, the
+runtime loads these skills from the local source folders. In binary production,
+the same declarations select versioned GAR/pip packages.
+
+Or from this blueprint folder:
 
 ```bash
-mn blueprint run <blueprint_id>
+mn blueprint run .
 ```
 
-Run a checked-in folder directly:
+## Inputs And Configuration
 
-```bash
-cd <blueprint_id>
-mn blueprint run --folder .
-```
+VC Assistant requires no initial configuration. Its bundled synthetic startup
+packets and local output folder provide safe defaults for the first run. Override
+the document and output folders only when you are ready to analyze your own
+startup materials.
 
-Run repository tests:
+- `document_folder`: folder containing startup documents. Each first-level subfolder is treated as one company; loose files are grouped by inferred company name.
+- `output_folder`: folder where per-company analysis folders and root index files are written.
+- `monitoring`: bounded single-run scan controls; the runtime scheduler decides when to launch the batch.
+- `input_skills.anydoc`: public Firecrawl AnyDoc Markdown conversion for non-PDF office-style inputs.
+- `input_skills.llm_ocr`: shared OCR enablement and document thresholds for PDF startup packets; model details stay in the skill.
+- `input_skills.web_browser`: unified public research with lightweight w3m support in the `docker_worker` image and policy-governed agent-browser/Chrome rendering supplied by the selected browser execution environment. The job image does not install Playwright or its Chromium/system dependency bundle.
+- `skill_runtime`: shared DockerWorker image settings for skills that need system binaries.
+- `execution.max_company_workers`: maximum changed-company packets processed concurrently; defaults to one for local Docker Model Runner stability.
+- `backpressure.llm`: serializes and spaces local LLM calls so agentic research does not overwhelm Docker Model Runner.
+- Concurrent RAG-consuming workers use the SDK RAG package's job-scoped Unix-socket service. One owner process retains the sole Milvus Lite connection to `databases/rag/milvus.db`; every specialist agent indexes and queries through that shared connection.
+- `internet_research`: public verification targets, bounded browser timeouts, Crunchbase/profile URL templates, and explicit deep-render controls.
+- `internet_research.max_parallel_research_agents`: maximum research agents running in parallel per changed company.
+- `scoring.max_workers`: maximum parallel method scorers per changed company.
 
-```bash
-python3.11 -m venv .venv
-.venv/bin/python -m pip install -r requirements-test.txt
-.venv/bin/python -m pytest -q
-```
+## Shared job data
 
-See [Runtime DAG Flow Patterns](DAG_FLOW_PATTERNS.md) for the catalog's
-event-driven, fork/join, service, and linear flow contracts.
+Each configured VC Assistant job owns persistent `knowledge/`,
+`databases/rag/`, and `state/`. Bundled diligence knowledge seeds once; later
+runs preserve edits and reuse one Milvus Lite database. The SDK RAG package
+single-flights startup indexing and serves parallel agent retrieval through one
+connection. Pitch inputs, reports, logs, and ordinary artifacts remain
+independent by `run_id`.
 
-## Persistent co-worker conversation
+## Outputs
 
-Every published blueprint declares the stable Job response service. After
-hiring, OtterDesk can ask bounded questions about the co-worker's role, safe
-configuration, schedule, and latest work when it has never run, is idle,
-paused, scheduled, completed, failed, or archived. Sending a question never
-starts the target co-worker.
+Each company receives a subfolder containing:
 
-Core owns this response service outside the workflow DAG. It uses sanitized Job
-context and Job-scoped knowledge, never a blueprint-defined service node or
-command, and excludes credentials, private source data, and unrestricted
-artifacts from its responses.
+- `analysis.json`
+- `analysis.md`
+- `method_scores.json`
+- `research_sources.json`
+- `sources.json`
+- `evidence.json`
+- `warnings.json`
 
-The catalog contract tests also expect this repository to live beside the companion
-`mn-skills` and `mn-agents` folders because they import shared blueprint support
-helpers and render shared agent templates.
-
-## Catalog
-
-| Blueprint | Category | Purpose |
-| --- | --- | --- |
-| [`gtm_assistant`](gtm_assistant/README.md) | Business | Turns de-identified customer feedback into activation, retention, product, and lifecycle decisions. |
-| [`drug_discovery_research_assistant`](drug_discovery_research_assistant/README.md) | Science | Runs one discovery cycle, evaluates five distinct molecules, writes a review packet to ~/Downloads/{job_name}, and completes. |
-| [`research_assistant`](research_assistant/README.md) | Science | A research assistant that combines deterministic evidence and verification stages with an isolated OpenShell worker for autonomous goal refinement, tool-driven exploration, hypothesis generation, and bounded generated-code experiments. |
-| [`software_architecture_advisor`](software_architecture_advisor/README.md) | Engineering | A read-only architecture advisor for local folders or public GitHub repositories, with dynamically planned child workflows, cited evidence, independent review and a prioritized roadmap. |
-| [`purchasing_manager`](purchasing_manager/README.md) | Finance | A source-grounded purchasing co-worker for heavy-asset decisions. It screens real market options, models landed cost, discounted and risk-adjusted TCO, EAC, unit economics, scenarios, and cash/finance/lease terms, then prepares an approval-ready packet without transacting. |
-| [`cctv_operator`](cctv_operator/README.md) | Security | A steerable NVIDIA CCTV co-worker with a self-contained Docker demo stream, CUDA-assisted MJPEG preview, live operator event feed, sparse baseline analysis, event-triggered frame bursts, and durable reviewed-frame artifacts. |
-| [`microduck_controller`](microduck_controller/README.md) | Robotics | Lets an OtterDesk user control the live Microduck MuJoCo simulation in ordinary language through bounded MCP actions, deterministic ball navigation, and stoppable continuous free play. |
-| [`litigation_analyst`](litigation_analyst/README.md) | Legal | Investigates legal-document folders with exact citations, bounded hypotheses, graph tools, and a draft audit trail. Defaults to public EMC2 sample data on Docker workers. |
-| [`legal_assistant`](legal_assistant/README.md) | Legal | A review-only legal document co-worker for invoice, bill, and contract review. Put invoices, bills, contracts, clause notes, labels, or supporting files in the input folder; it extracts payable fields, maps contract clauses, compares playbook expectations, flags review issues, and writes a source-grounded review packet to the output folder. |
-
-## Folder Contract
-
-Most blueprint folders contain:
-
-| Path | Purpose |
-| --- | --- |
-| `README.md` | Self-contained quickstart, inspection notes, and validation guidance. |
-| `SPEC.md` | User-facing problem, outcome, evaluation criteria, limits, and upgrade path. |
-| `TERM.md` | Terms, assumptions, or domain notes when present. |
-| `manifest.json` | Canonical blueprint/v1 identity, semantic release version, and role-document references. |
-| `workflow.json` | Logical topology and workflow policies. |
-| `execution.json` | Agents, workers, runtime requirements, services, and schedules. |
-| `contracts.json` | Inputs, outputs, artifacts, validation, status, and privacy. |
-| `extensions/` | Versioned platform and product descriptors. |
-| `config/default.json` | Default launch configuration and mock/sample inputs. |
-| `config/overwrite.json` | Optional local overrides. Do not commit customer secrets. |
-| `payloads/` | Worker code, prompts, policies, fixtures, and support files. |
-
-Blueprints that retain knowledge, RAG, or application state across executions
-declare `resources` in `extensions/storage.json` through `mn.storage`. Core creates one
-stable job-data directory per hired/configured job:
-
-```text
-$MN_HOME/job-data/<job-id>/
-  knowledge/
-  databases/rag/
-  state/
-```
-
-The bundle's knowledge seed is copied only when the stable job is initialized
-or explicitly reset. Later runs share that directory and never overwrite user
-edits. Run inputs, outputs, logs, and artifacts remain run-scoped. Two jobs
-created from the same blueprint receive different job-data directories and RAG
-databases.
-
-The standard payload layout is consistent across the catalog: `runtime/` contains
-the blueprint context adapter, `steps/` contains manifest-facing handlers, and
-`agents/` contains domain workers or services. Docker, native-host, OpenShell,
-and Beam worker assets stay as sibling payload directories (`docker_worker/`,
-`openshell_worker/`, or `beam_modules/`) rather than nested under a script
-wrapper. Python workflow steps are launched with the shared SDK module
-`python3 -m mn_sdk.step_runtime`.
-
-Python handler steps use module-only references such as `steps.research`; the
-shared `mn_sdk.step_runtime` entrypoint calls that module's `run()` function.
-Keep DAG topology in `workflow.json` rather than duplicating it in blueprint-local
-dispatch code or configuration handoff lists.
+The output root also contains `company_index.json`, `company_index.md`, `company_work_queue.json`, `research_coverage.json`, `method_coverage.json`, `run_summary.md`, and internal artifact folders for fact tables, research ledgers, method scores, and audit findings. When rendered browsing runs, `browser_audit.jsonl` and bounded files under `browser_artifacts/` record the actuator trail and captured artifacts.
 
 ## Safety Checklist
 
-- Review `manifest.json`, `payloads/`, and `pass_env` before live runs.
-- Start with mock, dry-run, or quick-test settings before enabling real external services.
-- Keep customer-specific inputs and secrets in local overrides or environment variables.
-- Update the local blueprint README and `SPEC.md` when behavior, inputs, outputs, or limits change.
-- Declare durable resources by logical name, validated relative path, access
-  mode, and optional `@/` bundle seed. Never declare or accept a host path.
+- Review `config/default.json` before using real startup documents.
+- Keep confidential pitch decks, financials, and customer names local.
+- Public research queries should use company names, categories, domains, and public claims, not confidential source excerpts.
+- Treat scores as heuristic review aids, not investment advice.
+- Generic human-control approval actions in platform metadata are workflow controls, not company filter labels or investment decisions.
 
-## Canonical packages
+## Local Documentation
 
-`index.json` is an ordered list of published package paths. Names, descriptions,
-versions, requirements, and product information come from each package's documents.
-Catalog reads validate data without importing Python code or preparing resources.
-All folders and ZIPs use `https://mirrorneuron.io/schemas/blueprint/v1/manifest.schema.json`.
-Use `mn_sdk.blueprints.read_blueprint`, `resolve_config`, and `compile_blueprint`;
-`open_blueprint` adds ZIP extraction and `export_blueprint` preserves the full package.
-External dependencies remain declared; offline vendoring is optional.
+- [SPEC](SPEC.md)
+- [TERM](TERM.md)
+- [License](LICENSE.md)
+- [Manifest](manifest.json)
+- [Default config](config/default.json)
+- [Startup research playbook](payloads/knowledge/startup_research_playbook.md)
 
-The `software_architecture_advisor` blueprint accepts a public HTTPS GitHub repository URL or local source folder and uses the shared graph-analysis skill in Docker workers. See [Architecture Advisor](software_architecture_advisor/README.md).
+## Persistent conversation
 
-SDK workflow capabilities are declared in the `packages` array in
-`dependencies.json`; domain skills remain in `skills` and agents in `agents`.
-Every package and skill declaration uses `type: "pip"`, `source: "gar"`, its full
-Python distribution name, and a pinned release version. For example:
+OtterDesk or another MCP client can ask this hired co-worker about its screening
+role, schedule, latest company analysis, or diligence gaps through the stable
+Job response service even when it has never run or is idle. The responder uses
+the existing Job-scoped startup-research RAG and never starts a batch or makes
+an investment decision.
 
-```json
-{"type": "pip", "source": "gar", "name": "mn-python-sdk-rag", "version": "0.1.0", "extras": ["milvus"]}
+## Validation
+
+From `mn-blueprints`, run the self-contained VC suite with the companion SDK,
+skill, and agent checkouts available:
+
+```bash
+python -m pytest vc_assistant/tests -q
+git diff --check
 ```
 
-Local installation resolves SDK packages from `mn-python-sdk/packages` and skills
-from `mn-skills` or this blueprint's `payloads/skills` projects by distribution
-name, ignoring the declared release version. Local setup enables
-`MN_USE_LOCAL_SKILLS=1`. Binary mode retains GAR pins and does not select bundled
-skill source automatically. The same declaration works in both modes; source
-paths are prepared by the SDK rather than authored in dependency records.
-Each blueprint activates only its declared SDK capability closure.
+## Blueprint package format
+
+This blueprint uses the canonical blueprint/v1 format in both folders and ZIPs.
+`manifest.json` contains identity, semantic release version, and document references.
+`workflow.json` owns logical topology and policies; `execution.json` owns workers,
+resources, and services; `contracts.json` owns input/output and artifact contracts.
+Platform descriptors live in `extensions/`, package requirements in
+`dependencies.json` when present, and operator defaults in `config/default.json`.
+The SDK reads these documents together and compiles the Core execution artifact.
+A ZIP contains the same files as the folder. Local overrides and invocation
+configuration are resolved by the SDK before launch.
+
+## SDK capability dependencies
+
+Release 1.1.0 migrates infrastructure from retired skill distributions to the
+current SDK component contract. `dependencies.json` declares pinned
+`mn-python-sdk-common`, `mn-python-sdk-rag[milvus]`,
+`mn-python-sdk-job-response`, and `mn-python-sdk-mcp` under `packages`.
+Task capabilities remain under `skills`; reusable workers remain under `agents`.
+The skill and agent pins follow the migration releases used by the OtterDesk
+catalog (1.3.23 and 1.3.10 respectively).
+
+Prompt/event helpers use `mn_sdk_common`; actor configuration and usage use the
+actor-review agent; foundational LLM access uses `mn_sdk.llm`. RAG owns indexing,
+retrieval, and the shared Job database, with the SDK runtime model adapter
+injected for embedding preparation and retrieval. The RAG `milvus` extra owns
+Milvus installation; the blueprint does not maintain a second dependency list.
+
+Local development (`MN_USE_LOCAL_SKILLS=1`) resolves declared SDK packages from
+`mn-python-sdk/packages` and skills/agents from their companion source projects,
+ignoring release pins. Binary installation uses the pinned GAR releases.

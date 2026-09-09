@@ -1,39 +1,25 @@
-from __future__ import annotations
+"""Use companion source checkouts when running the VC package tests directly."""
 
 import sys
 from pathlib import Path
 
-from workspace_paths import companion_workspace
-
-WORKSPACE = companion_workspace(Path(__file__).resolve().parents[1])
-SIBLING_SOURCES = (
-    Path(__file__).resolve().parents[1],
-    Path(__file__).resolve().parents[2] / "mn-blueprints",
-    WORKSPACE / "mn-python-sdk",
-
-    WORKSPACE / "mn-skills" / "live_video_analysis_skill" / "src",
-
-)
-
-SIBLING_SOURCES = (*SIBLING_SOURCES,
-    *sorted((WORKSPACE / "mn-skills").glob("*/src")),
-    *sorted((WORKSPACE / "mn-agents").glob("*/src")),
-    *sorted((WORKSPACE / "mn-python-sdk" / "packages").glob("*/src")),
-    WORKSPACE.parent / "mn-graph-engine" / "python" / "src",
-)
-
-for source in SIBLING_SOURCES:
-    if source.is_dir() and str(source) not in sys.path:
+blueprints_root = Path(__file__).resolve().parents[2]
+workspace = blueprints_root.parent / "mirror-neuron-set"
+if not workspace.is_dir():
+    workspace = blueprints_root.parent
+sources = [blueprints_root, workspace / "mn-python-sdk"]
+sources.extend((workspace / "mn-python-sdk" / "packages").glob("*/src"))
+for repository in ("mn-skills", "mn-agents"):
+    sources.extend((workspace / repository).glob("*/src"))
+for source in sources:
+    if source.is_dir():
         sys.path.insert(0, str(source))
-
 
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def isolated_payload_modules():
-    # Blueprints deliberately use the same package names inside isolated worker
-    # processes. Unit tests must provide the same isolation in this process.
+def isolated_vc_payload_modules():
     prefixes = ("domain", "agents", "steps", "runtime")
     previous_path = list(sys.path)
     previous = {
@@ -44,6 +30,7 @@ def isolated_payload_modules():
     for name in previous:
         sys.modules.pop(name, None)
     sys.path[:] = [entry for entry in sys.path if Path(entry).name != "payloads"]
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "payloads"))
     yield
     for name in list(sys.modules):
         if any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes):

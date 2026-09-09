@@ -1,150 +1,156 @@
-# OtterDesk Blueprint Catalog Specification
+# VC Assistant SPEC
 
-## Purpose
+## What We Want To Achieve
 
-`otterdesk-blueprints` is the self-contained product blueprint catalog consumed
-by OtterDesk and MirrorNeuron tooling. Each catalog entry combines a source
-manifest, launch configuration, domain payload, user documentation, safety
-terms, and deterministic tests into an installable co-worker/workflow bundle.
+Build a reviewable VC analysis workflow that monitors a folder containing one or more startup document packets, groups those documents by company, coordinates a reusable specialist-agent crew through explicit DAG steps, performs privacy-safe public research, runs deterministic numerical analysis for each valuation heuristic, audits the results, and writes organized score-only reports.
 
-This specification applies only to this repository. Reusable agents, skills,
-SDK compilation, and Core delivery are dependencies, not code owned here.
+## Customer Problem
 
-VC Assistant, Financial Advisor, Legal Assistant, and Research Assistant
-use foundational `mn_sdk.llm` access through blueprint support and do not
-declare `mirrorneuron-litellm-communicate-skill`. Their RAG packages and OCR skills own
-complete model specifications and pass them to the SDK's lazy runtime wrapper.
-Blueprints declare skills, SDK packages, and product-level behavior; first-use runtime
-selection chooses and prepares the concrete DMR model.
+Early-stage startup review is noisy. Pitch decks, notes, founder bios, traction updates, market claims, and technical material arrive in mixed formats. VC analysts need a fast way to compare early opportunities with lightweight heuristics while preserving evidence and avoiding fake precision.
 
-## Catalog Contract
+## Design Details
 
-Root `index.json` is an ordered inventory of published package paths.
-`category.json` defines shared categorization. All descriptive and executable
-information comes from each package, including its semantic release version.
-A package omitted from the inventory remains unpublished.
+The blueprint is a scheduled batch-style OtterDesk workflow. Agents are reusable specialist workers; steps are durable phases in the workflow DAG. Step ids use action phrases, agent ids use role names, and the two namespaces must remain disjoint.
 
-Every package uses the same canonical blueprint/v1 manifest in development,
-installed folders, generated folders, and ZIP distributions. `manifest.json`
-owns identity and role-document references. `workflow.json` owns logical
-steps and policies; `execution.json` owns worker bindings, resources, services,
-and schedules; `contracts.json` owns inputs, outputs, artifacts, and validation.
-Platform features use registered, versioned files under `extensions/`.
-`config/default.json` owns operator tunables; `config/overwrite.json` contains
-optional local overrides. Package dependencies are declared in `dependencies.json`.
+Each manifest step references a `payloads/steps` module through `run.definition`. That module declares the step's input contract, output contract, and internal `StepSpec` collaboration graph. `agents.registry` defines handlers and immutable handler parameters independently from optional `llm.agents` review configuration. An agent may be reused by multiple steps or calls; every compiled call receives a unique invocation id derived from its step and call alias.
 
-Every published package enables the `mn.response` extension. Core owns this
-bounded service outside the workflow DAG. Its descriptor may also declare a
-bounded MCP agent. Runtime-affecting extensions require a supported SDK handler.
-Catalog listing reads and validates documents without Python imports or resource
-preparation. Python step modules load only during explicit compilation.
+The durable data plane is the run filesystem. The live message plane is acknowledged Redis Streams. Agent handlers use the route-free SDK `receive_input` and `send_output` functions. The workflow DAG contains only logical step dependencies; each compiled step contains a generated source boundary, its internal agent graph, and a generated sink boundary. The internal graph owns routing, fan-out, fan-in, retries, ACKs, deduplication, and dead-letter behavior. `prepare_company_evidence` runs extractor → normalizer, while research and scoring calls run in parallel and join before the sink completes the logical step.
 
-The response service is not a workflow node, port, command, or run-scoped
-worker. Blueprint response context must exclude credentials, private source
-documents, unrestricted artifacts, and other confidential run data.
+The workflow requests `manual_recover`. Redis retains bounded live coordination state, but a lost runtime lease does not trigger repeated automatic reconstruction of the full 46-agent graph. The supported recovery path is to submit a fresh run against the same durable inputs and filesystem artifacts; completed artifact writes and invocation idempotency records make that rerun safe.
 
-## Blueprint Ownership
+Production code follows a strict ownership boundary. `payloads/steps` owns orchestration declarations, `payloads/agents` owns executable worker entrypoints, `payloads/domain` owns VC-specific evidence/research/valuation/report policy, and `payloads/runtime` owns runtime context and shared-service preparation. Domain-neutral message envelopes, artifact references, durable replay, document intake utilities, and control agents belong to the SDK, reusable agents, and skills. No aggregate `agents/domain.py` compatibility module is permitted.
 
-A blueprint owns product/domain composition:
+Every scorer registry ID resolves to a same-named agent module. The shared scorer executor handles durable queue mechanics, while deterministic formulas remain individually inspectable under `domain/valuation` (`first_chicago.py`, `berkus.py`, `scorecard.py`, and the other method modules).
 
-- the mission, user inputs, domain assumptions, safety limits, and outputs;
-- logical step contracts and direct `needs` dependencies;
-- specialist registry bindings and internal collaboration definitions;
-- domain prompts, formulas, evidence/review policy, and report semantics; and
-- deterministic artifact naming and customer-facing documentation.
+| DAG step | Required agents |
+| --- | --- |
+| `detect_packet_changes` | `startup_folder_watcher` |
+| `assemble_company_packets` | `company_packet_grouper` |
+| `prepare_company_evidence` | `document_evidence_extractor`, `claim_normalizer` |
+| `plan_public_research` | `research_planner` |
+| `collect_public_research` | `company_identity_researcher`, `funding_researcher`, `market_comp_researcher`, `traction_verifier`, `rendered_page_researcher` |
+| `reconcile_research_evidence` | `research_reconciler` |
+| `calculate_valuation_scores` | `berkus_scorer`, `scorecard_bill_payne_scorer`, `risk_factor_summation_scorer`, `venture_capital_method_scorer`, `first_chicago_scorer`, `comparables_market_multiple_scorer`, `cost_to_duplicate_scorer` |
+| `audit_valuation_analysis` | `score_consistency_auditor` |
+| `write_company_reports` | `company_report_writer` |
+| `publish_batch_summary` | `batch_index_writer` |
 
-It does not own generic message delivery, ACK/retry/dead-letter behavior,
-source/sink/join controls, manifest compilation, reusable tool mechanics, or
-shared agent lifecycle composition.
+The workflow groups first-level input subfolders as companies. Loose files are grouped by inferred company names from filenames or document text. Public research is constrained to privacy-safe queries based on company names, product categories, domains, and public claims.
 
-## Runtime Layout
+The online research layer uses `web_browser_skill` as its only browser capability. Standard mode performs provider discovery, readable plain-text extraction, bounded retries, throttling, and adaptive local engine selection; explicit deep mode renders JavaScript-heavy public sources such as Crunchbase through a deterministic, policy-governed `agent-browser` actuator. MirrorNeuron remains the planner. The browser layer owns session/domain policy, approval gates, per-run audit records, and bounded artifacts; it does not expose eval, arbitrary JavaScript, uploads, profiles, clipboard access, raw CDP, or agent-browser's autonomous chat loop. The workflow records source status, snippets, warnings, and blocked/login/robots outcomes rather than bypassing access controls. Changed company packets, per-company research agents, and numerical method scorers run with bounded parallel workers while outputs remain ordered by stable company slug.
 
-- `payloads/domain/` is the single domain package and is split into focused
-  responsibility-named modules.
-- `payloads/steps/` defines logical step I/O mappings and internal `StepSpec`
-  collaboration only; it contains no domain processing.
-- `payloads/agents/` exposes bounded specialist handlers with discoverable
-  registry mappings.
-- `payloads/runtime/` is limited to config/context/service preparation,
-  lifecycle/observability, persistence, finalization, and failure handling.
-- Docker, host, OpenShell, or Beam payload assets stay in explicit sibling
-  payload directories.
+Actor-style LLM analysis uses MirrorNeuron's logical `default` model. The
+bundled catalog normally resolves it through adaptive local model selection;
+an operator-selected provider definition may replace it without changing the
+blueprint. Numerical scoring remains deterministic: formulas, weights,
+scenario math, missing-evidence status, and audit checks are owned by
+deterministic workers. Non-substantive records such as research plans,
+configured references, disabled browser fallback notices, unavailable skills,
+blocked pages, and failed requests do not create comparable evidence by
+themselves.
 
-Core expands logical steps to generated boundary controls. Domain agents never
-complete logical steps, implement physical routes, or traverse workflow
-dependencies.
+Local LLM calls are deliberately backpressured. The default run serializes Docker Model Runner calls, spaces them slightly, keeps company and research-agent defaults serial, and caps agentic research loops so a scheduled batch does not burst many model calls at once.
 
-## Data and Artifact Contract
+## Input
 
-Live coordination messages contain bounded data and artifact references. Large,
-sensitive, or authoritative results are durably written before a handler
-returns. Duplicate delivery is safe through invocation idempotency and
-deterministic artifact paths.
+The blueprint requires no initial configuration: bundled synthetic startup
+packets and a local output path provide complete first-run defaults.
 
-Bundle-local config paths use SDK `@/` references and are resolved by the shared
-staging/runtime contract. Blueprint code consumes resolved paths and does not
-implement alternate path syntax.
+The prototype accepts local startup documents in PDF, TXT, Markdown, JSON, and CSV formats. Text-like files are read directly. PDF files use the shared `llm_ocr_skill` for embedded or OCR text extraction. The skill owns its model and prepares it lazily only when OCR is required. If a PDF startup packet cannot produce usable text, the batch run fails closed instead of creating metadata-only evidence.
 
-Persistent cross-run state is explicit in `metadata.job_data.resources`.
-Resources declare a logical name, validated relative job-data path,
-`read_only`/`read_write` access, and optional bundle-local `@/` directory seed.
-The stable `job_id`, not blueprint ID or `run_id`, is the storage isolation
-key. Seeds apply only on initialization and explicit data reset. Knowledge,
-Milvus Lite databases, and durable application state remain job-scoped; run
-inputs, outputs, logs, and ordinary artifacts remain run-scoped.
+## Output: Expected Customer Outcome
 
-Blueprints must not derive host storage paths, treat replication as a
-transactional filesystem, or clear job data during run cleanup. Mutable
-file-backed resources require Core owner-node placement and the declared access
-mode. Two jobs using one blueprint must remain mutually isolated.
+Each company gets a dedicated output folder with structured JSON, Markdown, source records, and local evidence records. The report covers:
 
-## Documentation and Safety
+- Berkus Method
+- Scorecard / Bill Payne Method
+- Risk Factor Summation Method
+- Venture Capital Method
+- First Chicago Method
+- Comparables / Market Multiple Method
+- Cost-to-Duplicate Method
 
-Each blueprint README explains setup, smallest safe run, inputs/outputs, and
-inspection. Its SPEC states current outcomes, evaluation criteria, contracts,
-limits, risks, and non-goals. TERM records domain/legal assumptions where used.
-These documents, manifest, config, payload behavior, catalog metadata, and tests
-must agree.
+If evidence is missing for a method, the method status is `insufficient_evidence`.
 
-Blueprints never commit customer data or secrets. External network, camera,
-voice, email, filesystem, model, GPU, and sandbox capabilities are explicit in
-requirements and user documentation. Review-only outputs are not presented as
-professional, legal, medical, financial, scientific, or security guarantees.
+Internal artifacts include `company_work_queue.json`, company fact tables, research ledgers, method-score files, audit findings, research coverage, method coverage, and a run summary.
 
-## Versioning
+## Persistent job data
 
-Changes to required inputs, topology, outputs/artifacts, default domain policy,
-side effects, safety boundaries, dependencies, or evaluation semantics require
-a blueprint version/compatibility review and synchronized catalog metadata.
-Additive optional config is compatible only when omission preserves behavior.
+The stable job owns cross-run knowledge, Milvus Lite RAG data, and explicitly
+durable state. Run inputs and reports remain execution-scoped. Seeds apply only
+on job initialization/reset; run cancellation, retention, or deletion does not
+remove shared data. All agents in a job use the same
+`databases/rag/milvus.db` and collection namespace. The reusable SDK RAG package owns
+a job-scoped Unix-socket service that retains the only Milvus Lite connection;
+parallel agents submit indexing, state, and retrieval operations through that
+service instead of opening the file independently.
 
-## Acceptance
+## Evaluation Criteria
 
-The default suite validates catalog/index consistency, source manifests,
-registry handlers, package dependencies, runtime/step/domain boundaries,
-artifacts, documentation, and blueprint-specific deterministic behavior:
+- Company grouping is explainable and stable.
+- Workflow step ids and agent ids remain disjoint.
+- Every step definition references one or more valid registry agents and declares its input and output mappings.
+- Multi-agent research and scoring crews join before their containing step completes.
+- Agent messages contain bounded results and artifact references rather than confidential documents or large ledgers.
+- `payloads/runtime/runtime.py` remains below 500 lines and contains only runtime context, configuration, service preparation, observability, and lifecycle persistence.
+- `payloads/agents/domain.py` does not exist, agent modules do not import it, and no VC domain module grows beyond the architecture size guard.
+- Every valuation scorer registry entry resolves to a same-named agent module and an individually owned formula module.
+- All seven method sections are present for every company.
+- Scores are included where evidence exists.
+- Missing evidence is explicit and not hallucinated.
+- Public research avoids confidential local excerpts.
+- Public research attempts company website, Crunchbase/profile, founder public profile, funding mention, press, competitor, and market-context verification where configured.
+- Changed company packets are processed concurrently when `execution.max_company_workers` permits, without changing output ordering.
+- Each numerical method emits `status`, `score`, `inputs_used`, `formula_or_weighting`, `assumptions`, `source_refs`, and `warnings`.
+- The score consistency auditor flags missing method outputs, invalid scored/null states, unsupported assumptions, and formula coverage gaps.
+- Scorecard and Comparables remain `insufficient_evidence` when only default filler values or non-substantive source records exist.
+- Outputs are organized into one subfolder per company.
+- No investment decision label is emitted.
 
-```bash
-python -m pytest tests -q
-```
+## Prototype Limits
 
-Live external capabilities remain explicit opt-in checks. Contract changes in a
-sibling SDK/agent/skill/Core layer are tested in that owning repository as well
-as through the affected catalog integration.
+This is an early heuristic report assistant. Scores are not valuations, investment recommendations, legal advice, or financial advice. Comparable, exit, and rebuild-cost outputs are deliberately conservative when source evidence is thin.
 
-SDK workflow capabilities are declared in the `packages` array in
-`dependencies.json`; domain skills remain in `skills` and agents in `agents`.
-Every package and skill declaration uses `type: "pip"`, `source: "gar"`, its full
-Python distribution name, and a pinned release version. For example:
+## Persistent Job response service
 
-```json
-{"type": "pip", "source": "gar", "name": "mn-python-sdk-rag", "version": "0.1.0", "extras": ["milvus"]}
-```
+The top-level response service stays available without an active screening
+batch. It combines sanitized role, schedule, safe configuration, lifecycle,
+and latest-Run evidence with the existing Job-scoped startup research RAG. It
+answers through `ask_job` without starting research, altering scoring, or
+taking investment action.
 
-Local installation resolves SDK packages from `mn-python-sdk/packages` and skills
-from `mn-skills` or this blueprint's `payloads/skills` projects by distribution
-name, ignoring the declared release version. Local setup enables
-`MN_USE_LOCAL_SKILLS=1`. Binary mode retains GAR pins and does not select bundled
-skill source automatically. The same declaration works in both modes; source
-paths are prepared by the SDK rather than authored in dependency records.
-Each blueprint activates only its declared SDK capability closure.
+## Upgrade Path To Real Customer Use
+
+Add richer source citation capture, customer-specific scoring weights, authenticated market-data and funding-data connectors, analyst review annotations, historical calibration against partner decisions, and governance controls for confidential data handling.
+
+## Blueprint package format
+
+This blueprint uses the canonical blueprint/v1 format in both folders and ZIPs.
+`manifest.json` contains identity, semantic release version, and document references.
+`workflow.json` owns logical topology and policies; `execution.json` owns workers,
+resources, and services; `contracts.json` owns input/output and artifact contracts.
+Platform descriptors live in `extensions/`, package requirements in
+`dependencies.json` when present, and operator defaults in `config/default.json`.
+The SDK reads these documents together and compiles the Core execution artifact.
+A ZIP contains the same files as the folder. Local overrides and invocation
+configuration are resolved by the SDK before launch.
+
+## SDK capability dependencies
+
+Release 1.1.0 migrates infrastructure from retired skill distributions to the
+current SDK component contract. `dependencies.json` declares pinned
+`mn-python-sdk-common`, `mn-python-sdk-rag[milvus]`,
+`mn-python-sdk-job-response`, and `mn-python-sdk-mcp` under `packages`.
+Task capabilities remain under `skills`; reusable workers remain under `agents`.
+The skill and agent pins follow the migration releases used by the OtterDesk
+catalog (1.3.23 and 1.3.10 respectively).
+
+Prompt/event helpers use `mn_sdk_common`; actor configuration and usage use the
+actor-review agent; foundational LLM access uses `mn_sdk.llm`. RAG owns indexing,
+retrieval, and the shared Job database, with the SDK runtime model adapter
+injected for embedding preparation and retrieval. The RAG `milvus` extra owns
+Milvus installation; the blueprint does not maintain a second dependency list.
+
+Local development (`MN_USE_LOCAL_SKILLS=1`) resolves declared SDK packages from
+`mn-python-sdk/packages` and skills/agents from their companion source projects,
+ignoring release pins. Binary installation uses the pinned GAR releases.
