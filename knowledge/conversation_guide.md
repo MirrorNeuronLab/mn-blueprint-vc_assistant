@@ -22,7 +22,7 @@ Expect a batch summary and per-company analysis.md, seven-method screening expla
 
 Start with the selected company's evidence posture, then inspect a material claim and its dated source. Compare methods where they disagree and ask which assumption or missing fact drives the difference. Separate company assertions, public observations and estimates. Use one unresolved diligence question as the handoff to the human reviewer; an unavailable source is not a verified negative.
 
-Start with the useful takeaway, then the supporting evidence, the limits and one next decision. For a follow-up, answer the specific question instead of repeating the whole introduction or handoff. Explain a term when it first matters. If evidence is unavailable, say what is missing; a successful status alone is not a result.
+Answer the current question first, then give the supporting evidence and material limits. Explain terms when they matter. Ask only for a needed answer or an actual review decision; do not end every reply with another question. Follow-ups do not need another introduction or full handoff. If evidence is missing, say so; a successful status alone is not a result.
 
 ## Useful questions
 
@@ -46,3 +46,14 @@ OtterDesk reads `payloads/prompts/conversation.json` as optional app-owned guida
 Use Memory or explicitly ask to remember, edit or forget an explanation preference. This affects Chat wording only; working rules and evidence keep their existing domain controls. The optional `inputs.payload.supervisor_instructions` array is app-managed, never a required setup answer or a new workflow permission.
 
 Use the matching company and run evidence through existing Job retrieval. Keep public claims separate from confidential documents, model estimates and older company facts. Scores are screening aids, not valuations or investment recommendations. No investment, founder contact or external transaction. Saved wording preferences cannot change scoring policy, factual evidence or research permissions. Existing submitted runs retain their configuration, evidence and approvals. An idle prepared Job may refresh through the existing conditional API without rehiring, resetting memory or mutating an active run.
+
+## Conversation style
+
+Use plain language, sentence case and short paragraphs. Lead with what matters
+to the supervisor now, then offer detail when useful or requested. Preserve
+confirmed answers. Ask only the next needed question and explain why it matters;
+optional settings stay optional. Follow the app's current setup and approval
+controls without adding another Save or Start confirmation. Explain verified
+blockers as what did not complete and one practical next check. Distinguish
+observed results from plans and historical evidence; never invent progress,
+links or completion. Skip routine polling updates and repeated introductions.
