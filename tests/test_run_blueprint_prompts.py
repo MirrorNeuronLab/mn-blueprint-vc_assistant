@@ -14,6 +14,8 @@ from mn_sdk.blueprint_support import (
     load_runtime_config,
 )
 from mn_sdk.blueprints import blueprint_definition, read_blueprint
+from mn_sdk.model_catalog import build_deferred_runtime_model_plan
+from mn_sdk.model_runtime import required_blueprint_models, resolve_llm_environment
 from mn_sdk.step_runtime import StepContext, resolve_handler
 from vc_assistant.domain_test_support import load_domain_test_surface
 
@@ -314,6 +316,35 @@ def test_model_contract_uses_the_shared_adaptive_default():
         assert "quantization" not in declaration
         assert "runtime_model" not in declaration
         assert "fallback_model" not in declaration
+
+
+def test_single_node_launch_leaves_default_model_admission_to_the_runtime(tmp_path):
+    manifest = blueprint_definition(read_blueprint(BLUEPRINT_DIR))
+    config = load_runtime_config(RUNTIME_PATH)
+    mini = {
+        "name": "mini",
+        "status": "healthy",
+        "devices": [
+            {
+                "kind": "gpu",
+                "vendor": "apple",
+                "memory_total_mb": 24 * 1024,
+                "memory_free_mb": 10 * 1024,
+            }
+        ],
+    }
+    plan = build_deferred_runtime_model_plan(
+        required_blueprint_models(manifest, config),
+        resource_report={"nodes": [mini]},
+        mn_home=tmp_path,
+    )
+
+    assert plan["errors"] == []
+    assert plan["models"] == []
+    env = resolve_llm_environment(config, container=True)
+    assert env["MN_LLM_MODEL"] == "default"
+    assert env["MN_LLM_API_BASE"] == "auto"
+    assert env["MN_RUNTIME_MODEL_MANAGED"] == "1"
 
 
 def test_valuation_methods_map_to_discoverable_specialist_agents():

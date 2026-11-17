@@ -16,13 +16,14 @@ def test_compiled_dependencies_enable_only_required_sdk_capabilities():
     compiled = expand_manifest_source(source, root_dir=ROOT)
     from packaging.requirements import Requirement
     expected = {"mn-python-sdk-common", "mn-python-sdk-models", "mn-python-sdk-rag",
-                "mn-python-sdk-job-response", "mn-python-sdk-mcp", "mn-blueprint-blocks"}
+                "mn-python-sdk-job-response", "mn-python-sdk-mcp", "mn-blueprint-blocks",
+                "mn-python-sdk-web-ui"}
     source_requirements = set(component_requirement_lines(source))
     assert {Requirement(item).name for item in source_requirements} == expected
     assert set(component_requirement_lines(compiled)) == source_requirements
     assert "mn-python-sdk-common>=1.3.61.dev38,<2" in source_requirements
     assert "mn-blueprint-blocks>=1.3.61.dev38,<2" in source_requirements
-    assert any(item["name"] == "mirrorneuron-python-sdk" and item["version"] == ">=1.3.61.dev38,<2"
+    assert any(item["name"] == "mirrorneuron-python-sdk" and item["version"] == ">=1.4.1.dev46,<2"
         for item in source["packages"])
     assert compiled["packages"] == source["packages"]
     retired = {

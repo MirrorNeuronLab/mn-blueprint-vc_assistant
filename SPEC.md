@@ -46,10 +46,10 @@ The workflow groups first-level input subfolders as companies. Loose files are g
 The online research layer uses `web_browser_skill` as its only browser capability. Standard mode performs provider discovery, readable plain-text extraction, bounded retries, throttling, and adaptive local engine selection; explicit deep mode renders JavaScript-heavy public sources such as Crunchbase through a deterministic, policy-governed `agent-browser` actuator. MirrorNeuron remains the planner. The browser layer owns session/domain policy, approval gates, per-run audit records, and bounded artifacts; it does not expose eval, arbitrary JavaScript, uploads, profiles, clipboard access, raw CDP, or agent-browser's autonomous chat loop. The workflow records source status, snippets, warnings, and blocked/login/robots outcomes rather than bypassing access controls. Changed company packets, per-company research agents, and numerical method scorers run with bounded parallel workers while outputs remain ordered by stable company slug.
 
 Actor-style LLM analysis uses MirrorNeuron's logical `default` model. The
-runtime automatically selects and prepares a compatible model on first use
-for the available hardware. Supported Macs and low-spec PCs can use Gemma 4; the blueprint has no
-Nemotron dependency, fixed parameter count or quantization, or dedicated-GPU
-requirement. Concrete model compatibility belongs to the runtime catalog.
+primary profile sets `install_mode` to `cluster_provided` so the runtime owns
+model preparation. On both single-node and clustered runs, the runtime selects
+a compatible model on the node running the job and checks available memory
+when the model needs to load.
 An operator-selected provider definition can replace the default without
 changing the blueprint.
 Numerical scoring remains deterministic: formulas, weights,
@@ -92,6 +92,13 @@ Each company gets a dedicated output folder with structured JSON, Markdown, sour
 If evidence is missing for a method, the method status is `insufficient_evidence`.
 
 Internal artifacts include `company_work_queue.json`, company fact tables, research ledgers, method-score files, audit findings, research coverage, method coverage, and a run summary.
+
+After publishing the screening results, the batch writer uses the common web
+report template to present the saved scores, method outcomes, evidence coverage,
+and follow-up items. The read-only `web/index.html` and its `web_ui.json` handle are
+optional run artifacts. The renderer builds a self-contained page from the
+published results. If the page fails to render, the JSON and Markdown outputs
+are available for review.
 
 ## Persistent job data
 

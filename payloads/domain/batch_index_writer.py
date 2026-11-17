@@ -20,6 +20,7 @@ from .reporting import build_artifact_quality_report, build_method_coverage, bui
 from .research_core import actor_review_config
 from .research_services import research_resources
 from .runtime_tools import merged_observation_trace
+from .web_report import publish_web_report
 
 
 def ledger_usage(ledger):
@@ -258,6 +259,9 @@ def batch_index_writer(block, inputs):
         return files
     publication = merge_publications(block, publication,
         freeze_file_publication(block, prepare_sources, name='batch-sources'))
+    web_report = publish_web_report(block, artifact)
+    if web_report is not None:
+        publication = merge_publications(block, publication, web_report)
     state.update(stage='batch_index_writer', published_files=publication, batch_projection=prepared.to_dict())
     final = block.freeze_checkpoint(checkpoint_path('batch_index_writer'), lambda: state)
     return {'status': 'completed', 'state': final.to_dict(), 'published_files': publication,

@@ -381,7 +381,7 @@
           "ui.json",
           "web/index.html"
         ],
-        "description": "Optional review dashboard for artifact inspection."
+        "description": "Optional screening report published with completed run results."
       }
     },
     "config": [
@@ -544,9 +544,7 @@
     ],
     "web_ui_adapters": [
       "none",
-      "static_html",
-      "gradio",
-      "custom"
+      "static_html"
     ]
   },
   "internet_research": {
@@ -895,7 +893,6 @@
         "llm_retries"
       ]
     },
-    "enabled": true,
     "input": {
       "adapter": "none",
       "custom_url": null,
@@ -905,13 +902,6 @@
       "port": null,
       "share": false,
       "title": null
-    },
-    "output": {
-      "adapter": "gradio",
-      "auto_generate": true,
-      "custom_url": null,
-      "refresh_seconds": 2,
-      "title": "VC Assistant"
     }
   },
   "text_memory": {

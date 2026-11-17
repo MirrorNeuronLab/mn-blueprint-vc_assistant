@@ -175,6 +175,7 @@
     "primary": {
       "api_base": "auto",
       "backend": "llama.cpp",
+      "install_mode": "cluster_provided",
       "max_tokens": 1200,
       "mock_mode": "fake",
       "mode": "live",

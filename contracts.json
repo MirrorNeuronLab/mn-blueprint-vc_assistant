@@ -256,13 +256,27 @@
         "type": "resource_samples"
       },
       {
+        "artifact_id": "web_report",
+        "mime_type": "text/html",
+        "path": "web/index.html",
+        "producer": "workflow",
+        "required": false,
+        "privacy": "confidential",
+        "source_refs": [
+          "final_artifact.json"
+        ],
+        "type": "web_report"
+      },
+      {
         "artifact_id": "web_ui",
         "mime_type": "application/json",
         "path": "web_ui.json",
-        "producer": "web_ui",
+        "producer": "workflow",
+        "required": false,
+        "privacy": "confidential",
         "schema_version": "mn.blueprint.web_ui.v1",
         "source_refs": [
-          "run.json"
+          "web/index.html"
         ],
         "type": "web_ui"
       },

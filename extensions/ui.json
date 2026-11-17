@@ -1,5 +1,12 @@
 {
   "$schema": "https://mirrorneuron.io/schemas/blueprint/v1/extensions/ui.schema.json",
+  "web_ui": {
+    "enabled": true,
+    "adapter": "static_html",
+    "kind": "output",
+    "title": "VC screening report",
+    "description": "Review company scores, method coverage, supporting evidence, and diligence gaps from a completed run."
+  },
   "init_config_review": {
     "required": false,
     "fields": [

@@ -11,11 +11,9 @@ This blueprint is a report-only early diligence assistant. It helps a reviewer i
 
 It does not decide whether to invest, pass, watch, or reject. It writes scores, evidence, assumptions, missing-evidence flags, and source references so the user can decide.
 
-All actor-style LLM analysis uses MirrorNeuron's logical `default` model. The
-runtime automatically selects and prepares a compatible model on first use
-for the available hardware, including Gemma 4 on supported Macs and low-spec PCs.
-The blueprint does not require Nemotron, a fixed parameter count or quantization, or a
-dedicated GPU. Model selection stays with the runtime. Numerical formulas and
+All actor-style LLM analysis uses MirrorNeuron's logical `default` model. On a
+single node or a cluster, MirrorNeuron selects and prepares the model on the
+node running the job when the workflow first needs it. Numerical formulas and
 missing-evidence gates remain deterministic.
 
 An operator-selected provider model can still replace the runtime default with
@@ -138,6 +136,12 @@ Each company receives a subfolder containing:
 - `warnings.json`
 
 The run folder also contains `company_index.json`, `company_index.md`, `company_work_queue.json`, `research_coverage.json`, `method_coverage.json`, `run_summary.md`, and internal artifact folders for fact tables, research ledgers, method scores, and audit findings. When rendered browsing runs, `browser_audit.jsonl` and bounded files under `browser_artifacts/` record the actuator trail and captured artifacts.
+
+Open the **VC screening report** in OtterDesk after the run completes, or open
+`web/index.html` directly from the run's output folder. The offline report
+compares company scores and evidence quality, shows the seven methods and their
+gaps, and lists key claims and follow-up evidence. The JSON and Markdown files
+contain the full screening results.
 
 ## Safety Checklist
 
