@@ -83,8 +83,8 @@ def _claim_rows(companies):
     for company in companies:
         name = company["company_name"]
         evidence = {item["evidence_id"]: item for item in (company.get("evidence_items") or [])}
-        titles = {
-            source["source_id"]: source.get("title")
+        records = {
+            source["source_id"]: source
             for source in (company.get("source_records") or [])
         }
         claims = sorted(
@@ -104,9 +104,13 @@ def _claim_rows(companies):
             sources = []
             for item in supporting_items:
                 filename = PureWindowsPath(item.get("filename") or "").name
-                label = filename or titles.get(item.get("source_id")) or item.get("source_type")
+                record = records.get(item.get("source_id"), {})
+                label = filename or record.get("title") or item.get("source_type")
                 if label:
-                    sources.append(compact_text(label, 120))
+                    captured = compact_text(record.get("retrieved_at"), 40)
+                    source_id = compact_text(item.get("source_id"), 80)
+                    sources.append(" · ".join(part for part in (compact_text(label, 120), source_id,
+                                          "retrieved " + captured if captured else "") if part))
             row = (
                 name,
                 compact_text(claim.get("canonical_claim"), 480),
@@ -187,7 +191,7 @@ def render_web_report(artifact, *, title):
             ["Company", "Claim", "Verification", "Confidence %", "Sources"],
             claim_rows,
             caption="Key claims",
-        ) if claim_rows else "<p>This run recorded no claims.</p>"
+        ) if claim_rows else "<p>No narrative claims with supporting sources appear in this view.</p>"
         diligence = _table(
             ["Company", "Evidence to gather"],
             followups,

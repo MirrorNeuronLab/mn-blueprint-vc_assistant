@@ -28,19 +28,19 @@
   ],
   "setup_guide": {
     "schema": "otterdesk.setup_guide.v1",
-    "introduction": "I'll review startup evidence, explain seven screening methods and surface diligence questions for your investment review. The bundled startup packets are synthetic; real screening needs an approved document folder, preferably one subfolder per company. You'll get company reports with sources and gaps, not an investment decision or founder outreach.",
+    "introduction": "Try the fictional startup packets to see how a screening report handles claims and missing evidence. For a real review, choose a folder of authorized company documents.",
     "sample": {
       "available": true,
       "title": "Synthetic startup screening",
-      "description": "Review bundled synthetic startup packets with the normal screening workflow. Public research may be incomplete; sample companies are not real opportunities.",
-      "expected_output": "After sample screening completes, company reports with explanations of the seven methods, dated sources, warnings and open diligence questions.",
+      "description": "Screen the bundled fictional startup packets using the usual workflow.",
+      "expected_output": "Company reports with dated sources, the seven screening methods and open diligence questions.",
       "values": {
         "document_sources.folder_path": "@/examples/sample_inputs",
         "outputs.folder_path": "~/Downloads/vc-assistant"
       }
     },
     "real": {
-      "introduction": "Choose the approved startup-document folder and output location, preferably with one subfolder per company. I’ll prepare company screening reports with dated sources, method explanations and diligence gaps.",
+      "introduction": "Choose your startup-document folder. A subfolder per company makes the packets easier to identify.",
       "values": {
         "document_sources.folder_path": ""
       }
@@ -66,6 +66,11 @@
         "default": "~/Downloads/vc-assistant"
       }
     ],
-    "prompt_file": "@/payloads/prompts/setup.md"
+    "prompt_file": "@/payloads/prompts/setup.md",
+    "run_guidance": {
+      "on_start": "I’ll compare company claims across the screening methods so you can see where the evidence agrees or leaves a gap.",
+      "web_ui_ready": "Open the screening report, choose a company, and check the sources behind one diligence question.",
+      "output_ready": "Open the output folder, choose a company report, and check the dated sources behind one open question."
+    }
   }
 }
